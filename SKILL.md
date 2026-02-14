@@ -1,5 +1,5 @@
 ---
-name: adobe-fonts
+name: adobe-fonts-skill
 description: Search Adobe Fonts (Typekit) families, create and manage web kits/projects, and return ready-to-use embed snippets plus CSS font-family values. Use when the user asks to find Adobe fonts, compare font options, set up Typekit for a website, add fonts to kits, publish kits, or generate copy/paste font embed metadata for Codex, Claude Code, or OpenCode workflows.
 license: Complete terms in LICENSE
 metadata:
@@ -20,8 +20,8 @@ These rules are mandatory unless the user explicitly asks otherwise.
 - Do not include per-step raw JSON in the final chat response.
 - Do not include `<details>` blocks with command dumps in the final chat response.
 - Keep final chat response concise (decision summary + final snippets + artifact path).
-- Put long-form content in `./adobe-fonts/summary-<timestamp>.md`.
-- If raw JSON archive is requested, save files under `./adobe-fonts/runs/<timestamp>/` and return paths only.
+- Put long-form content in `./adobe-fonts-skill/summary-<timestamp>.md`.
+- If raw JSON archive is requested, save files under `./adobe-fonts-skill/runs/<timestamp>/` and return paths only.
 
 ## Workflow
 
@@ -47,10 +47,10 @@ Resolve a working CLI path first (recommended from any project directory):
 ```bash
 if [ -z "${AFONT_BIN:-}" ]; then
   for p in \
-    "$HOME/.agents/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.codex/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.claude/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.opencode/skills/adobe-fonts/scripts/afont"
+    "$HOME/.agents/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.codex/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.claude/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.opencode/skills/adobe-fonts-skill/scripts/afont"
   do
     if [ -x "$p" ]; then
       export AFONT_BIN="$p"
@@ -60,7 +60,7 @@ if [ -z "${AFONT_BIN:-}" ]; then
 fi
 
 if [ -z "${AFONT_BIN:-}" ] || [ ! -x "$AFONT_BIN" ]; then
-  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts -a codex -g -y" >&2
+  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts-skill -a codex -g -y" >&2
   return 1 2>/dev/null || exit 1
 fi
 
@@ -146,7 +146,7 @@ Do not dump the final mega report directly into chat.
 
 - Tool-call JSON can stay in normal command output.
 - Save the final long-form deliverable to:
-- `./adobe-fonts/summary-<timestamp>.md`
+- `./adobe-fonts-skill/summary-<timestamp>.md`
 - In chat, return a short summary + the file path.
 - Do not paste per-step raw JSON in final chat response unless user explicitly asks.
 - Only save raw per-step JSON files when the user explicitly asks for an archive.
@@ -163,9 +163,9 @@ Screenshot defaults (when visual comparison is useful):
 
 - Capture previews only for shortlisted families (typically top 2-4), not every candidate.
 - Save screenshots under:
-- `./adobe-fonts/assets/`
+- `./adobe-fonts-skill/assets/`
 - Example command:
-- `"$AFONT_BIN" view --family <family-slug> --output-dir ./adobe-fonts/assets --json`
+- `"$AFONT_BIN" view --family <family-slug> --output-dir ./adobe-fonts-skill/assets --json`
 - Include screenshot paths (or markdown image lines) inside `summary-<timestamp>.md`.
 
 Always return:

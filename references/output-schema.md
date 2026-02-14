@@ -33,7 +33,7 @@ All commands support `--json` and output:
     "warnings": ["warning text"],
     "nextActions": ["next step"],
     "cache": {
-      "dbPath": "/Users/you/.codex/skills/adobe-fonts/.cache/fonts.sqlite3",
+      "dbPath": "/Users/you/.codex/skills/adobe-fonts-skill/.cache/fonts.sqlite3",
       "lastRefreshAt": "2026-02-14T00:00:00.000Z",
       "stale": false
     },
@@ -42,8 +42,8 @@ All commands support `--json` and output:
       "resolvedFamilySlug": "droid-serif",
       "pageUrl": "https://fonts.adobe.com/fonts/droid-serif",
       "source": "adobe_page",
-      "outputDir": "/Users/you/.codex/skills/adobe-fonts/.cache/views",
-      "screenshotPath": "/Users/you/.codex/skills/adobe-fonts/.cache/views/droid-serif-2026-02-14T00-00-00-000Z.png",
+      "outputDir": "/Users/you/.codex/skills/adobe-fonts-skill/.cache/views",
+      "screenshotPath": "/Users/you/.codex/skills/adobe-fonts-skill/.cache/views/droid-serif-2026-02-14T00-00-00-000Z.png",
       "screenshotBytes": 123456,
       "sha256": "3b2b9f0f2b1f...",
       "viewport": {
@@ -53,8 +53,8 @@ All commands support `--json` and output:
       "fullPage": true
     },
     "codex": {
-      "imagePath": "/Users/you/.codex/skills/adobe-fonts/.cache/views/droid-serif-2026-02-14T00-00-00-000Z.png",
-      "markdownImage": "![afont-preview](/Users/you/.codex/skills/adobe-fonts/.cache/views/droid-serif-2026-02-14T00-00-00-000Z.png)"
+      "imagePath": "/Users/you/.codex/skills/adobe-fonts-skill/.cache/views/droid-serif-2026-02-14T00-00-00-000Z.png",
+      "markdownImage": "![afont-preview](/Users/you/.codex/skills/adobe-fonts-skill/.cache/views/droid-serif-2026-02-14T00-00-00-000Z.png)"
     },
     "dryRun": true,
     "action": "create | update | add-family | publish"

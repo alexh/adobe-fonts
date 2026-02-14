@@ -1,8 +1,9 @@
-# adobe-fonts
+# adobe-fonts-skill
 
 Adobe Fonts (Typekit) skill for Codex, Claude Code, and OpenCode.
 
 This repository is a single-skill package for the open Skills CLI ecosystem.
+CLI command remains `afont`.
 
 ## Install
 
@@ -10,10 +11,10 @@ Use this repository path:
 
 ```bash
 # Install this skill
-npx skills add alexh/adobe-fonts
+npx skills add alexh/adobe-fonts-skill
 
 # Install globally for specific agents
-npx skills add alexh/adobe-fonts -a codex -a claude-code -a opencode -g -y
+npx skills add alexh/adobe-fonts-skill -a codex -a claude-code -a opencode -g -y
 ```
 
 ## Requirements
@@ -45,13 +46,13 @@ export AFONT_CACHE_DIR="/custom/path/for/afont-cache"
 Cache location default:
 
 - `<skill-install-dir>/.cache/fonts.sqlite3`
-- Example: `~/.codex/skills/adobe-fonts/.cache/fonts.sqlite3`
-- Example: `~/.claude/skills/adobe-fonts/.cache/fonts.sqlite3`
+- Example: `~/.codex/skills/adobe-fonts-skill/.cache/fonts.sqlite3`
+- Example: `~/.claude/skills/adobe-fonts-skill/.cache/fonts.sqlite3`
 
 Path behavior note:
 
 - If you run `scripts/afont` from this repository checkout, cache will be under this repo (`<repo>/.cache/fonts.sqlite3`).
-- If you run the installed binary (`$HOME/.agents/skills/adobe-fonts/scripts/afont`), cache will be under the installed skill directory.
+- If you run the installed binary (`$HOME/.agents/skills/adobe-fonts-skill/scripts/afont`), cache will be under the installed skill directory.
 
 ## CLI Quick Start
 
@@ -60,10 +61,10 @@ Resolve the installed skill CLI path first (recommended when running from anothe
 ```bash
 if [ -z "${AFONT_BIN:-}" ]; then
   for p in \
-    "$HOME/.agents/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.codex/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.claude/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.opencode/skills/adobe-fonts/scripts/afont"
+    "$HOME/.agents/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.codex/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.claude/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.opencode/skills/adobe-fonts-skill/scripts/afont"
   do
     if [ -x "$p" ]; then
       export AFONT_BIN="$p"
@@ -73,7 +74,7 @@ if [ -z "${AFONT_BIN:-}" ]; then
 fi
 
 if [ -z "${AFONT_BIN:-}" ] || [ ! -x "$AFONT_BIN" ]; then
-  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts -g -y" >&2
+  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts-skill -g -y" >&2
   return 1 2>/dev/null || exit 1
 fi
 ```
