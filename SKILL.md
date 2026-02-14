@@ -48,9 +48,13 @@ Resolve a working CLI path first (recommended from any project directory):
 if [ -z "${AFONT_BIN:-}" ]; then
   for p in \
     "$HOME/.agents/skills/adobe-fonts/scripts/afont" \
+    "$HOME/.agents/skills/adobe-fonts-skill/scripts/afont" \
     "$HOME/.codex/skills/adobe-fonts/scripts/afont" \
+    "$HOME/.codex/skills/adobe-fonts-skill/scripts/afont" \
     "$HOME/.claude/skills/adobe-fonts/scripts/afont" \
-    "$HOME/.opencode/skills/adobe-fonts/scripts/afont"
+    "$HOME/.claude/skills/adobe-fonts-skill/scripts/afont" \
+    "$HOME/.opencode/skills/adobe-fonts/scripts/afont" \
+    "$HOME/.opencode/skills/adobe-fonts-skill/scripts/afont"
   do
     if [ -x "$p" ]; then
       export AFONT_BIN="$p"
@@ -60,7 +64,7 @@ if [ -z "${AFONT_BIN:-}" ]; then
 fi
 
 if [ -z "${AFONT_BIN:-}" ] || [ ! -x "$AFONT_BIN" ]; then
-  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts -a codex -g -y" >&2
+  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts-skill -a codex -g -y" >&2
   return 1 2>/dev/null || exit 1
 fi
 
