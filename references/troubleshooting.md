@@ -9,13 +9,9 @@ Set an absolute binary path first, then reuse it:
 ```bash
 if [ -z "${AFONT_BIN:-}" ]; then
   for p in \
-    "$HOME/.agents/skills/adobe-fonts/scripts/afont" \
     "$HOME/.agents/skills/adobe-fonts-skill/scripts/afont" \
-    "$HOME/.codex/skills/adobe-fonts/scripts/afont" \
     "$HOME/.codex/skills/adobe-fonts-skill/scripts/afont" \
-    "$HOME/.claude/skills/adobe-fonts/scripts/afont" \
     "$HOME/.claude/skills/adobe-fonts-skill/scripts/afont" \
-    "$HOME/.opencode/skills/adobe-fonts/scripts/afont" \
     "$HOME/.opencode/skills/adobe-fonts-skill/scripts/afont"
   do
     if [ -x "$p" ]; then

@@ -3,7 +3,7 @@
 Adobe Fonts (Typekit) skill for Codex, Claude Code, and OpenCode.
 
 This repository is a single-skill package for the open Skills CLI ecosystem.
-Skill ID remains `adobe-fonts` and the CLI command remains `afont`.
+CLI command remains `afont`.
 
 ## Install
 
@@ -46,15 +46,13 @@ export AFONT_CACHE_DIR="/custom/path/for/afont-cache"
 Cache location default:
 
 - `<skill-install-dir>/.cache/fonts.sqlite3`
-- Example (skill ID dir): `~/.codex/skills/adobe-fonts/.cache/fonts.sqlite3`
-- Example (repo name dir): `~/.codex/skills/adobe-fonts-skill/.cache/fonts.sqlite3`
-- Example (skill ID dir): `~/.claude/skills/adobe-fonts/.cache/fonts.sqlite3`
-- Example (repo name dir): `~/.claude/skills/adobe-fonts-skill/.cache/fonts.sqlite3`
+- Example: `~/.codex/skills/adobe-fonts-skill/.cache/fonts.sqlite3`
+- Example: `~/.claude/skills/adobe-fonts-skill/.cache/fonts.sqlite3`
 
 Path behavior note:
 
 - If you run `scripts/afont` from this repository checkout, cache will be under this repo (`<repo>/.cache/fonts.sqlite3`).
-- If you run the installed binary (`$HOME/.agents/skills/adobe-fonts/scripts/afont` or `$HOME/.agents/skills/adobe-fonts-skill/scripts/afont`), cache will be under the installed skill directory.
+- If you run the installed binary (`$HOME/.agents/skills/adobe-fonts-skill/scripts/afont`), cache will be under the installed skill directory.
 
 ## CLI Quick Start
 
@@ -63,13 +61,9 @@ Resolve the installed skill CLI path first (recommended when running from anothe
 ```bash
 if [ -z "${AFONT_BIN:-}" ]; then
   for p in \
-    "$HOME/.agents/skills/adobe-fonts/scripts/afont" \
     "$HOME/.agents/skills/adobe-fonts-skill/scripts/afont" \
-    "$HOME/.codex/skills/adobe-fonts/scripts/afont" \
     "$HOME/.codex/skills/adobe-fonts-skill/scripts/afont" \
-    "$HOME/.claude/skills/adobe-fonts/scripts/afont" \
     "$HOME/.claude/skills/adobe-fonts-skill/scripts/afont" \
-    "$HOME/.opencode/skills/adobe-fonts/scripts/afont" \
     "$HOME/.opencode/skills/adobe-fonts-skill/scripts/afont"
   do
     if [ -x "$p" ]; then
@@ -145,7 +139,7 @@ The CLI supports `--json` and emits a stable shape documented in:
 Prefer saving run artifacts to the current project instead of pasting large JSON in chat.
 
 ```bash
-RUN_DIR="./adobe-fonts/runs/$(date +%Y%m%d-%H%M%S)"
+RUN_DIR="./adobe-fonts-skill/runs/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$RUN_DIR"
 
 "$AFONT_BIN" doctor --json > "$RUN_DIR/00_doctor.json"
@@ -156,7 +150,7 @@ mkdir -p "$RUN_DIR"
 
 Then write a short markdown summary at:
 
-- `./adobe-fonts/runs/<timestamp>/summary.md`
+- `./adobe-fonts-skill/runs/<timestamp>/summary.md`
 
 ## Testing
 
