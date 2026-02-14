@@ -27,6 +27,8 @@ Set token in your shell:
 export ADOBE_FONTS_API_TOKEN="your-token"
 ```
 
+Get/create token: `https://fonts.adobe.com/account/tokens`
+
 Optional:
 
 ```bash
@@ -34,6 +36,9 @@ export ADOBE_FONTS_DEFAULT_KIT="my-kit"
 export ADOBE_FONTS_DEFAULT_DOMAINS="example.com,www.example.com"
 export AFONT_API_BASE="https://typekit.com/api/v1/json"
 export AFONT_CACHE_MAX_AGE_HOURS="168"
+export AFONT_HTTP_TIMEOUT_MS="25000"
+export AFONT_HTTP_MAX_RETRIES="2"
+export AFONT_HTTP_RETRY_BASE_MS="500"
 export AFONT_CACHE_DIR="/custom/path/for/afont-cache"
 ```
 
@@ -43,45 +48,76 @@ Cache location default:
 - Example: `~/.codex/skills/adobe-fonts/.cache/fonts.sqlite3`
 - Example: `~/.claude/skills/adobe-fonts/.cache/fonts.sqlite3`
 
+Path behavior note:
+
+- If you run `scripts/afont` from this repository checkout, cache will be under this repo (`<repo>/.cache/fonts.sqlite3`).
+- If you run the installed binary (`$HOME/.agents/skills/adobe-fonts/scripts/afont`), cache will be under the installed skill directory.
+
 ## CLI Quick Start
+
+Resolve the installed skill CLI path first (recommended when running from another project directory):
+
+```bash
+if [ -z "${AFONT_BIN:-}" ]; then
+  for p in \
+    "$HOME/.agents/skills/adobe-fonts/scripts/afont" \
+    "$HOME/.codex/skills/adobe-fonts/scripts/afont" \
+    "$HOME/.claude/skills/adobe-fonts/scripts/afont" \
+    "$HOME/.opencode/skills/adobe-fonts/scripts/afont"
+  do
+    if [ -x "$p" ]; then
+      export AFONT_BIN="$p"
+      break
+    fi
+  done
+fi
+
+if [ -z "${AFONT_BIN:-}" ] || [ ! -x "$AFONT_BIN" ]; then
+  echo "afont CLI not found. Reinstall skill: npx skills add alexh/adobe-fonts -g -y" >&2
+  return 1 2>/dev/null || exit 1
+fi
+```
 
 ```bash
 # Health check
-scripts/afont doctor
+"$AFONT_BIN" doctor
 
-# Build or refresh local SQLite + FTS index (recommended first run)
-scripts/afont index refresh
+# One-time warmup after install (recommended for fast searches)
+"$AFONT_BIN" index refresh
 
 # View cache/index status
-scripts/afont index status
+"$AFONT_BIN" index status
+
+# View cache stats (counts + top classifications/foundries)
+"$AFONT_BIN" index stats --limit 8
 
 # Search families (uses local cache first, API fallback if needed)
-scripts/afont search --query legitima --limit 5
+"$AFONT_BIN" search --query legitima --limit 5
 
 # Force cache refresh before search
-scripts/afont search --query editorial --refresh-cache
+"$AFONT_BIN" search --query editorial --refresh-cache
 
 # Search cache only (no API calls)
-scripts/afont search --query round --cache-only
+"$AFONT_BIN" search --query round --cache-only
 
-# Capture Adobe family preview screenshot (Codex-consumable output)
-scripts/afont view --url https://fonts.adobe.com/fonts/droid-serif --json
+# Capture Adobe family preview screenshot
+"$AFONT_BIN" view --url https://fonts.adobe.com/fonts/droid-serif --json
 
 # Resolve by family slug/name and capture
-scripts/afont view --family droid-serif --json
+"$AFONT_BIN" view --family droid-serif --json
 
 # List kits
-scripts/afont kits list
+"$AFONT_BIN" kits list
 
 # Ensure a kit exists
-scripts/afont kits ensure --name marketing-site --domains example.com,www.example.com
+"$AFONT_BIN" kits ensure --name marketing-site --domains example.com,www.example.com
 
 # Add family to a kit
-scripts/afont kits add-family --kit marketing-site --family legitima
+"$AFONT_BIN" kits add-family --kit marketing-site --family legitima
 
 # Publish and show embed snippets
-scripts/afont kits publish --kit marketing-site
-scripts/afont kits embed --kit marketing-site
+"$AFONT_BIN" kits publish --kit marketing-site
+"$AFONT_BIN" kits embed --kit marketing-site
 ```
 
 ## Output Contract
@@ -89,6 +125,31 @@ scripts/afont kits embed --kit marketing-site
 The CLI supports `--json` and emits a stable shape documented in:
 
 - `references/output-schema.md`
+
+## Reference Docs
+
+- Output schema: `references/output-schema.md`
+- API/cache notes: `references/api-notes.md`
+- Troubleshooting: `references/troubleshooting.md`
+- Example final summary: `references/example-summary.md`
+
+## Recommended Artifact Workflow
+
+Prefer saving run artifacts to the current project instead of pasting large JSON in chat.
+
+```bash
+RUN_DIR="./adobe-fonts/runs/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$RUN_DIR"
+
+"$AFONT_BIN" doctor --json > "$RUN_DIR/00_doctor.json"
+"$AFONT_BIN" index status --json > "$RUN_DIR/00_index_status.json"
+"$AFONT_BIN" index stats --json > "$RUN_DIR/00_index_stats.json"
+"$AFONT_BIN" search --query "editorial serif" --classification serif --limit 8 --cache-only --json > "$RUN_DIR/10_search_editorial_serif.json"
+```
+
+Then write a short markdown summary at:
+
+- `./adobe-fonts/runs/<timestamp>/summary.md`
 
 ## Testing
 
@@ -108,6 +169,8 @@ AFONT_RUN_VIEW_E2E=1 npm run test:unit
 - Adobe Fonts API is legacy Typekit API and may evolve.
 - There is no first-party full-text search endpoint in the legacy API.
 - This skill keeps a local SQLite cache with FTS so repeated searches are fast and description-aware.
+- On first install (no cache yet), search warns that uncached lookups may be slow and recommends:
+  - `afont index refresh --per-page 500 --max-pages 40`
 - Cache files are stored inside the skill directory by default (not in a global random location).
 - Mutating kit commands support `--dry-run`.
 - This skill does not patch framework files deterministically. It returns metadata/snippets for the calling agent to apply.

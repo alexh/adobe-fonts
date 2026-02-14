@@ -445,7 +445,7 @@ test('search requires --query', async (t) => {
 
 test('search via API returns ranked fonts', async (t) => {
   const { env } = await setupContext(t);
-  const run = await runAfont(['search', '--query', 'droid', '--no-cache', '--json'], { env });
+  const run = await runAfont(['search', '--query', 'droid', '--no-cache', '--confirm-uncached', '--json'], { env });
   assertExitCode(run, 0);
   const payload = parseJsonOutput(run);
 
@@ -453,6 +453,16 @@ test('search via API returns ranked fonts', async (t) => {
   assert.ok(Array.isArray(payload.result.fonts));
   assert.ok(payload.result.fonts.some((font) => font.slug === 'droid-serif'));
   assert.ok(Array.isArray(payload.result.snippets.cssExamples));
+});
+
+test('search with --no-cache requires explicit confirmation when cache is missing', async (t) => {
+  const { env } = await setupContext(t);
+  const run = await runAfont(['search', '--query', 'droid', '--no-cache', '--json'], { env });
+  assertExitCode(run, 2);
+  const payload = parseJsonOutput(run);
+  assert.match(payload.error.message, /Refusing uncached search with empty cache/);
+  assert.ok(Array.isArray(payload.error.details.nextActions));
+  assert.ok(payload.error.details.nextActions.some((action) => action.includes('index refresh --per-page 500 --max-pages 40')));
 });
 
 test('kits list fails without token', async (t) => {
@@ -543,6 +553,32 @@ test('index status works when cache does not exist', async (t) => {
   const payload = parseJsonOutput(run);
   assert.equal(payload.result.intent, 'index_status');
   assert.equal(payload.result.cache.exists, false);
+  assert.ok(payload.result.warnings.some((warning) => warning.includes('Cache is empty')));
+  assert.ok(payload.result.nextActions.includes('afont index refresh --per-page 500 --max-pages 40'));
+});
+
+test('index stats works when cache does not exist', async (t) => {
+  const { env } = await setupContext(t);
+  const run = await runAfont(['index', 'stats', '--json'], { env });
+  assertExitCode(run, 0);
+  const payload = parseJsonOutput(run);
+  assert.equal(payload.result.intent, 'index_stats');
+  assert.equal(payload.result.cache.exists, false);
+  assert.equal(payload.result.stats, null);
+});
+
+test('search warns about warmup when cache is missing', async (t) => {
+  if (!hasSqliteCli()) {
+    t.skip('sqlite3 CLI is not available in PATH');
+    return;
+  }
+
+  const { env } = await setupContext(t);
+  const run = await runAfont(['search', '--query', 'droid', '--json'], { env });
+  assertExitCode(run, 0);
+  const payload = parseJsonOutput(run);
+  assert.equal(payload.result.intent, 'search');
+  assert.ok(payload.result.warnings.some((warning) => warning.includes('Cache is empty')));
 });
 
 test('index refresh builds cache and cache-only search uses sqlite index', async (t) => {
@@ -564,6 +600,27 @@ test('index refresh builds cache and cache-only search uses sqlite index', async
   const searchPayload = parseJsonOutput(searchRun);
   assert.equal(searchPayload.result.intent, 'search');
   assert.ok(searchPayload.result.fonts.some((font) => font.slug === 'droid-serif'));
+});
+
+test('index stats reports aggregate cache counts', async (t) => {
+  if (!hasSqliteCli()) {
+    t.skip('sqlite3 CLI is not available in PATH');
+    return;
+  }
+
+  const { env } = await setupContext(t);
+  const refreshRun = await runAfont(['index', 'refresh', '--per-page', '2', '--max-pages', '5', '--json'], { env });
+  assertExitCode(refreshRun, 0);
+
+  const statsRun = await runAfont(['index', 'stats', '--limit', '5', '--json'], { env });
+  assertExitCode(statsRun, 0);
+  const payload = parseJsonOutput(statsRun);
+  assert.equal(payload.result.intent, 'index_stats');
+  assert.ok(payload.result.cache.exists);
+  assert.ok(payload.result.stats.familyCount >= 3);
+  assert.ok(payload.result.stats.distinctClassifications >= 1);
+  assert.ok(Array.isArray(payload.result.stats.topClassifications));
+  assert.ok(Array.isArray(payload.result.stats.topFoundries));
 });
 
 test('view requires either --family or --url', async (t) => {
