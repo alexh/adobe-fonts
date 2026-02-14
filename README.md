@@ -135,7 +135,7 @@ The CLI supports `--json` and emits a stable shape documented in:
 
 ## Recommended Artifact Workflow
 
-Prefer saving run artifacts to the current project instead of pasting large JSON in chat.
+For repeatable debugging and easier sharing, save command output in a timestamped run folder.
 
 ```bash
 RUN_DIR="./adobe-fonts/runs/$(date +%Y%m%d-%H%M%S)"
@@ -147,7 +147,7 @@ mkdir -p "$RUN_DIR"
 "$AFONT_BIN" search --query "editorial serif" --classification serif --limit 8 --cache-only --json > "$RUN_DIR/10_search_editorial_serif.json"
 ```
 
-Then write a short markdown summary at:
+Optional: add a short summary at:
 
 - `./adobe-fonts/runs/<timestamp>/summary.md`
 
