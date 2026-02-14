@@ -128,10 +128,10 @@ The CLI supports `--json` and emits a stable shape documented in:
 
 ## Reference Docs
 
-- Output schema: `references/output-schema.md`
-- API/cache notes: `references/api-notes.md`
-- Troubleshooting: `references/troubleshooting.md`
-- Example final summary: `references/example-summary.md`
+- Output schema: [references/output-schema.md](references/output-schema.md)
+- API/cache notes: [references/api-notes.md](references/api-notes.md)
+- Troubleshooting: [references/troubleshooting.md](references/troubleshooting.md)
+- Example final summary: [references/example-summary.md](references/example-summary.md)
 
 ## Recommended Artifact Workflow
 
