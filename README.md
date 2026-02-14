@@ -133,24 +133,6 @@ The CLI supports `--json` and emits a stable shape documented in:
 - Troubleshooting: [references/troubleshooting.md](references/troubleshooting.md)
 - Example final summary: [references/example-summary.md](references/example-summary.md)
 
-## Recommended Artifact Workflow
-
-For repeatable debugging and easier sharing, save command output in a timestamped run folder.
-
-```bash
-RUN_DIR="./adobe-fonts/runs/$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$RUN_DIR"
-
-"$AFONT_BIN" doctor --json > "$RUN_DIR/00_doctor.json"
-"$AFONT_BIN" index status --json > "$RUN_DIR/00_index_status.json"
-"$AFONT_BIN" index stats --json > "$RUN_DIR/00_index_stats.json"
-"$AFONT_BIN" search --query "editorial serif" --classification serif --limit 8 --cache-only --json > "$RUN_DIR/10_search_editorial_serif.json"
-```
-
-Optional: add a short summary at:
-
-- `./adobe-fonts/runs/<timestamp>/summary.md`
-
 ## Testing
 
 ```bash
