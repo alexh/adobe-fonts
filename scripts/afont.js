@@ -7,12 +7,19 @@ const { spawnSync } = require('node:child_process');
 
 const BASE_URL = process.env.AFONT_API_BASE || 'https://typekit.com/api/v1/json';
 const TOKEN = process.env.ADOBE_FONTS_API_TOKEN || '';
+const TOKEN_PAGE_URL = 'https://fonts.adobe.com/account/tokens';
 const DEFAULT_KIT = process.env.ADOBE_FONTS_DEFAULT_KIT || '';
 const DEFAULT_DOMAINS = process.env.ADOBE_FONTS_DEFAULT_DOMAINS || '';
 const CACHE_MAX_AGE_HOURS = Number.parseInt(process.env.AFONT_CACHE_MAX_AGE_HOURS || '168', 10);
+const HTTP_TIMEOUT_MS = Number.parseInt(process.env.AFONT_HTTP_TIMEOUT_MS || '25000', 10);
+const HTTP_MAX_RETRIES = Number.parseInt(process.env.AFONT_HTTP_MAX_RETRIES || '2', 10);
+const HTTP_RETRY_BASE_MS = Number.parseInt(process.env.AFONT_HTTP_RETRY_BASE_MS || '500', 10);
 const DEFAULT_SKILL_DIR = process.env.AFONT_SKILL_DIR || path.dirname(path.dirname(__filename));
 const CACHE_DIR = process.env.AFONT_CACHE_DIR || path.join(DEFAULT_SKILL_DIR, '.cache');
 const CACHE_DB = path.join(CACHE_DIR, 'fonts.sqlite3');
+const WARMUP_REFRESH_PER_PAGE = 500;
+const WARMUP_REFRESH_MAX_PAGES = 40;
+const CACHE_WARMUP_COMMAND = `afont index refresh --per-page ${WARMUP_REFRESH_PER_PAGE} --max-pages ${WARMUP_REFRESH_MAX_PAGES}`;
 const VIEW_DEFAULT_WIDTH = 1440;
 const VIEW_DEFAULT_HEIGHT = 2200;
 const VIEW_DEFAULT_WAIT_MS = 1200;
@@ -21,6 +28,17 @@ const VIEW_HOSTS = new Set(['fonts.adobe.com', 'typekit.com', 'www.typekit.com']
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function cacheWarmupWarning() {
+  return `Cache is empty. First uncached searches can be slow. Consult the user before running uncached search, or run one-time warmup: \`${CACHE_WARMUP_COMMAND}\`. If warmup takes a while, ask me for a quick Adobe/font joke.`;
+}
+
+function staleCacheWarning(lastRefreshAt) {
+  if (lastRefreshAt) {
+    return `Cache is stale (last refresh: ${lastRefreshAt}). Consult the user before uncached search, or refresh for faster searches: \`${CACHE_WARMUP_COMMAND}\``;
+  }
+  return `Cache is stale. Consult the user before uncached search, or refresh for faster searches: \`${CACHE_WARMUP_COMMAND}\``;
 }
 
 function parseArgs(argv) {
@@ -119,6 +137,12 @@ function printPayload(payload, jsonMode) {
       process.stdout.write(`- ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}\n`);
     }
   }
+  if (result.stats) {
+    process.stdout.write(`stats:\n`);
+    for (const [key, value] of Object.entries(result.stats)) {
+      process.stdout.write(`- ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}\n`);
+    }
+  }
   if (result.view) {
     if (result.view.pageUrl) {
       process.stdout.write(`page: ${result.view.pageUrl}\n`);
@@ -156,7 +180,7 @@ function printPayload(payload, jsonMode) {
 }
 
 function usage() {
-  return `afont - Adobe Fonts/Typekit CLI\n\nUsage:\n  afont doctor [--json]\n  afont search --query <text> [--classification <name>] [--language <code>] [--limit <n>] [--per-page <n>] [--max-pages <n>] [--refresh-cache] [--cache-only] [--no-cache] [--json]\n  afont view --family <slug|name> [--url <https://...>] [--output-dir <path>] [--filename <name>] [--width <px>] [--height <px>] [--wait-ms <ms>] [--timeout-ms <ms>] [--full-page] [--dry-run] [--json]\n  afont index refresh [--library <id>] [--per-page <n>] [--max-pages <n>] [--json]\n  afont index status [--json]\n  afont kits list [--json]\n  afont kits ensure --name <kit-name> [--domains <d1,d2>] [--dry-run] [--json]\n  afont kits add-family --kit <id|name> --family <slug> [--weights <comma-list>] [--styles <comma-list>] [--dry-run] [--json]\n  afont kits publish --kit <id|name> [--dry-run] [--json]\n  afont kits embed --kit <id|name> [--json]\n`;
+  return `afont - Adobe Fonts/Typekit CLI\n\nUsage:\n  afont doctor [--json]\n  afont search --query <text> [--classification <name>] [--language <code>] [--limit <n>] [--per-page <n>] [--max-pages <n>] [--refresh-cache] [--cache-only] [--no-cache] [--confirm-uncached] [--json]\n  afont view --family <slug|name> [--url <https://...>] [--output-dir <path>] [--filename <name>] [--width <px>] [--height <px>] [--wait-ms <ms>] [--timeout-ms <ms>] [--full-page] [--dry-run] [--json]\n  afont index refresh [--library <id>] [--per-page <n>] [--max-pages <n>] [--json]\n  afont index status [--json]\n  afont index stats [--limit <n>] [--json]\n  afont kits list [--json]\n  afont kits ensure --name <kit-name> [--domains <d1,d2>] [--dry-run] [--json]\n  afont kits add-family --kit <id|name> --family <slug> [--weights <comma-list>] [--styles <comma-list>] [--dry-run] [--json]\n  afont kits publish --kit <id|name> [--dry-run] [--json]\n  afont kits embed --kit <id|name> [--json]\n`;
 }
 
 function normalizeFont(item) {
@@ -242,6 +266,27 @@ function serializeForm(fields) {
   return body;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status) {
+  return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+function parseRetryAfterMs(value) {
+  if (!value) return 0;
+  const seconds = Number.parseInt(String(value), 10);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, 30000);
+  }
+  const absolute = Date.parse(String(value));
+  if (Number.isFinite(absolute)) {
+    return Math.max(0, Math.min(absolute - Date.now(), 30000));
+  }
+  return 0;
+}
+
 async function requestApi(path, options = {}) {
   const url = new URL(`${BASE_URL}${path}`);
   if (options.query && typeof options.query === 'object') {
@@ -262,29 +307,65 @@ async function requestApi(path, options = {}) {
   if (options.form) {
     body = serializeForm(options.form);
   }
+  const timeoutMs = clampInt(options.timeoutMs || HTTP_TIMEOUT_MS, 1000, 120000, 25000);
+  const maxRetries = clampNonNegativeInt(options.maxRetries ?? HTTP_MAX_RETRIES, 0, 8, 2);
+  let lastError;
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body,
-  });
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
 
-  const text = await response.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { raw: text };
+      }
+
+      if (!response.ok) {
+        const error = new Error(`Request failed: ${method} ${path} -> HTTP ${response.status}`);
+        error.details = data;
+        error.status = response.status;
+        const retryable = isRetryableStatus(response.status);
+        if (retryable && attempt < maxRetries) {
+          const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+          const backoffMs = retryAfterMs || Math.min(30000, HTTP_RETRY_BASE_MS * (2 ** attempt));
+          await sleep(backoffMs);
+          continue;
+        }
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error;
+      const isAbort = error?.name === 'AbortError' || /timeout/i.test(String(error?.message || ''));
+      const isNetwork = error?.status === undefined;
+      const retryable = isAbort || isNetwork || isRetryableStatus(error?.status);
+      if (!(retryable && attempt < maxRetries)) {
+        if (isAbort) {
+          const timeoutError = new Error(`Request timed out: ${method} ${path} after ${timeoutMs}ms`);
+          timeoutError.details = { timeoutMs };
+          throw timeoutError;
+        }
+        throw error;
+      }
+      const backoffMs = Math.min(30000, HTTP_RETRY_BASE_MS * (2 ** attempt));
+      await sleep(backoffMs);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  if (!response.ok) {
-    const error = new Error(`Request failed: ${method} ${path} -> HTTP ${response.status}`);
-    error.details = data;
-    error.status = response.status;
-    throw error;
-  }
-
-  return data;
+  throw lastError || new Error(`Request failed: ${method} ${path}`);
 }
 
 function buildError(message, details) {
@@ -833,6 +914,62 @@ function getIndexStatusSync() {
   };
 }
 
+function getIndexStatusSafe() {
+  if (!fs.existsSync(CACHE_DB)) {
+    return getIndexStatusSync();
+  }
+  if (!hasSqliteCli()) {
+    return {
+      exists: true,
+      dbPath: CACHE_DB,
+      stale: true,
+      staleAfterHours: CACHE_MAX_AGE_HOURS,
+      error: 'sqlite3 CLI is not available; status metadata unavailable.',
+    };
+  }
+  return getIndexStatusSync();
+}
+
+function queryTopCounts(column, limit) {
+  return runSqlite(`
+    SELECT
+      CASE
+        WHEN TRIM(COALESCE(${column}, '')) = '' THEN 'unknown'
+        ELSE LOWER(TRIM(${column}))
+      END AS value,
+      COUNT(*) AS count
+    FROM families
+    GROUP BY value
+    ORDER BY count DESC, value ASC
+    LIMIT ${limit};
+  `, { json: true }).map((row) => ({
+    value: row.value,
+    count: Number.parseInt(String(row.count || '0'), 10) || 0,
+  }));
+}
+
+function getIndexStatsSync(limit = 8) {
+  ensureIndexSchema();
+  const safeLimit = clampInt(limit, 1, 50, 8);
+  const totalRows = runSqlite('SELECT COUNT(*) AS count FROM families;', { json: true });
+  const distinctClassRows = runSqlite(`
+    SELECT COUNT(DISTINCT CASE WHEN TRIM(COALESCE(classification, '')) = '' THEN 'unknown' ELSE LOWER(TRIM(classification)) END) AS count
+    FROM families;
+  `, { json: true });
+  const distinctFoundryRows = runSqlite(`
+    SELECT COUNT(DISTINCT CASE WHEN TRIM(COALESCE(foundry, '')) = '' THEN 'unknown' ELSE LOWER(TRIM(foundry)) END) AS count
+    FROM families;
+  `, { json: true });
+
+  return {
+    familyCount: Number.parseInt(String(totalRows[0]?.count || '0'), 10) || 0,
+    distinctClassifications: Number.parseInt(String(distinctClassRows[0]?.count || '0'), 10) || 0,
+    distinctFoundries: Number.parseInt(String(distinctFoundryRows[0]?.count || '0'), 10) || 0,
+    topClassifications: queryTopCounts('classification', safeLimit),
+    topFoundries: queryTopCounts('foundry', safeLimit),
+  };
+}
+
 function searchLocalIndex(query, options = {}) {
   ensureIndexSchema();
   const limit = clampInt(options.limit || 8, 1, 50, 8);
@@ -970,7 +1107,7 @@ async function refreshLocalIndex(options = {}) {
   }
 
   const familyIds = Array.from(idsToFetch);
-  const detailedFamilies = await mapLimit(familyIds, 8, async (familyId) => getFamilyDetailSafe(familyId, warnings));
+  const detailedFamilies = await mapLimit(familyIds, 4, async (familyId) => getFamilyDetailSafe(familyId, warnings));
   const validFamilies = detailedFamilies.filter((family) => family && family.id);
   const refreshedAt = nowIso();
 
@@ -1066,10 +1203,11 @@ async function commandDoctor(flags) {
     tokenPresent: hasToken(),
     apiReachable: false,
     endpoint: BASE_URL,
+    sqliteCliAvailable: hasSqliteCli(),
   };
 
   if (!checks.tokenPresent) {
-    warnings.push('ADOBE_FONTS_API_TOKEN is not set. Authenticated API calls will fail.');
+    warnings.push(`ADOBE_FONTS_API_TOKEN is not set. Generate a token at ${TOKEN_PAGE_URL} and export it before retrying.`);
   }
 
   try {
@@ -1079,13 +1217,27 @@ async function commandDoctor(flags) {
     warnings.push(`API reachability check failed: ${err.message}`);
   }
 
+  const cache = getIndexStatusSafe();
+  if (!checks.sqliteCliAvailable) {
+    warnings.push('sqlite3 CLI is not available; local search cache cannot be used.');
+  } else if (!cache.exists) {
+    warnings.push(cacheWarmupWarning());
+  } else if (cache.stale) {
+    warnings.push(staleCacheWarning(cache.lastRefreshAt));
+  }
+
   const payload = {
     result: {
       intent: 'doctor',
       checks,
+      cache,
       warnings,
       nextActions: checks.apiReachable
-        ? ['Run afont search --query <keyword>']
+        ? (!cache.exists
+            ? [CACHE_WARMUP_COMMAND, 'Run afont search --query <keyword>']
+            : (cache.stale
+                ? [CACHE_WARMUP_COMMAND, 'Run afont search --query <keyword>']
+                : ['Run afont search --query <keyword>']))
         : ['Verify token and run afont doctor again'],
     },
     meta: {
@@ -1162,7 +1314,7 @@ async function searchViaApi(flags, inheritedWarnings = []) {
     .map((family) => family.id)
     .filter((id) => !detailMap.has(id));
 
-  const detailedFamilies = await mapLimit(familyIdsForDetail, 6, async (familyId) => getFamilyDetailSafe(familyId, warnings));
+  const detailedFamilies = await mapLimit(familyIdsForDetail, 4, async (familyId) => getFamilyDetailSafe(familyId, warnings));
   for (const detail of detailedFamilies) {
     if (detail?.id) detailMap.set(detail.id, detail);
   }
@@ -1235,15 +1387,60 @@ async function commandIndexRefresh(flags) {
 }
 
 function commandIndexStatus(flags) {
-  const status = getIndexStatusSync();
+  const status = getIndexStatusSafe();
+  const warnings = [];
+  if (!hasSqliteCli()) {
+    warnings.push('sqlite3 CLI is not available; local search cache cannot be used.');
+  } else if (!status.exists) {
+    warnings.push(cacheWarmupWarning());
+  } else if (status.stale) {
+    warnings.push(staleCacheWarning(status.lastRefreshAt));
+  }
   const payload = {
     result: {
       intent: 'index_status',
       cache: status,
-      warnings: [],
+      warnings,
       nextActions: status.exists
-        ? ['Run afont search --query <keyword>']
-        : ['Run afont index refresh'],
+        ? (status.stale
+            ? [CACHE_WARMUP_COMMAND, 'Run afont search --query <keyword>']
+            : ['Run afont search --query <keyword>'])
+        : [CACHE_WARMUP_COMMAND],
+    },
+    meta: {
+      source: 'adobe_api',
+      timestamp: nowIso(),
+    },
+  };
+  printPayload(payload, isJson(flags));
+}
+
+function commandIndexStats(flags) {
+  const status = getIndexStatusSafe();
+  const warnings = [];
+  if (!hasSqliteCli()) {
+    warnings.push('sqlite3 CLI is not available; local cache stats cannot be queried.');
+  }
+  if (!status.exists) {
+    warnings.push(cacheWarmupWarning());
+  } else if (status.stale) {
+    warnings.push(staleCacheWarning(status.lastRefreshAt));
+  }
+
+  let stats = null;
+  if (status.exists && hasSqliteCli()) {
+    stats = getIndexStatsSync(flags.limit);
+  }
+
+  const payload = {
+    result: {
+      intent: 'index_stats',
+      cache: status,
+      stats,
+      warnings,
+      nextActions: !status.exists
+        ? [CACHE_WARMUP_COMMAND]
+        : ['Run afont search --query <keyword> --cache-only'],
     },
     meta: {
       source: 'adobe_api',
@@ -1265,10 +1462,26 @@ async function commandSearch(flags) {
   const useCache = !Boolean(flags['no-cache']);
   const cacheOnly = Boolean(flags['cache-only']);
   const refreshCache = Boolean(flags['refresh-cache']);
+  const confirmUncached = Boolean(flags['confirm-uncached']) || Boolean(flags['force-uncached']);
+
+  if (!useCache && !confirmUncached) {
+    const status = getIndexStatusSafe();
+    if (!status.exists || status.stale) {
+      fail(
+        `Refusing uncached search with ${status.exists ? 'stale' : 'empty'} cache. Consult user first, then rerun with --confirm-uncached or warm cache with \`${CACHE_WARMUP_COMMAND}\`.`,
+        2,
+        {
+          cache: status,
+          nextActions: [CACHE_WARMUP_COMMAND, 'Rerun with --no-cache --confirm-uncached only if user approves slow uncached search.'],
+        },
+        isJson(flags),
+      );
+    }
+  }
 
   if (useCache && hasSqliteCli()) {
     let status = getIndexStatusSync();
-    if ((refreshCache || !status.exists || status.stale) && hasToken()) {
+    if (refreshCache && hasToken()) {
       try {
         await refreshLocalIndex({
           perPage: flags['per-page'],
@@ -1279,8 +1492,12 @@ async function commandSearch(flags) {
       } catch (err) {
         warnings.push(`Cache refresh failed: ${err.message}`);
       }
-    } else if (!hasToken() && (refreshCache || !status.exists)) {
+    } else if (!hasToken() && refreshCache) {
       warnings.push('Token missing; cache refresh skipped.');
+    } else if (!status.exists) {
+      warnings.push(cacheWarmupWarning());
+    } else if (status.stale) {
+      warnings.push(staleCacheWarning(status.lastRefreshAt));
     }
 
     if (status.exists) {
@@ -1330,7 +1547,7 @@ async function commandSearch(flags) {
         intent: 'search',
         fonts: [],
         snippets: { htmlLinkTag: '', cssExamples: [] },
-        nextActions: ['Run afont index refresh'],
+        nextActions: [CACHE_WARMUP_COMMAND, 'Consult user before running uncached search (--no-cache).'],
         warnings: [...warnings, 'Cache-only mode enabled and no cache match found.'],
       },
       meta: {
@@ -1724,6 +1941,10 @@ async function main() {
       }
       if (sub === 'status') {
         commandIndexStatus(flags);
+        return;
+      }
+      if (sub === 'stats') {
+        commandIndexStats(flags);
         return;
       }
 
